@@ -65,9 +65,7 @@ INT_PTR __stdcall DlgProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 			if (fileName == "")
 				return 1;
 
-			Debugger debugger(fileName);
-			
-			std::thread thread(debugger.OpenProcess());
+			std::thread thread(OpenProcess, fileName);
 
 			return 1;
 		}

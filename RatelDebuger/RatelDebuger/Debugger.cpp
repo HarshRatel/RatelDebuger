@@ -1,47 +1,11 @@
 #include "Debugger.hpp"
 
-
-
-Debugger::Debugger()
-{
-}
-
-Debugger::Debugger(std::string fileName) : _fileName(fileName)
-{
-}
-
-void Debugger::OpenProcess()
-{
-	if (_fileName == "")
-		throw std::runtime_error("No exe to debug");
-
-	STARTUPINFO si;
-	PROCESS_INFORMATION pi;
-	ZeroMemory(&si, sizeof(si));
-	si.cb = sizeof(si);
-	ZeroMemory(&pi, sizeof(pi));
-
-	if (!CreateProcess(_fileName.c_str(), NULL, NULL, NULL, FALSE,
-						DEBUG_ONLY_THIS_PROCESS, NULL, NULL, &si, &pi))
-		throw std::runtime_error("Failed open process");
-
-	DEBUG_EVENT debug_event = { 0 };
-
-	EnterDebugLoop(&debug_event);
-}
-
-
-Debugger::~Debugger()
-{
-}
-
-
-std::string Debugger::ProcessStackOverflow(const LPDEBUG_EVENT debugEv)
+std::string ProcessStackOverflow(const LPDEBUG_EVENT debugEv)
 {
 	return "Stack Overflow exception";
 }
 
-std::string Debugger::EnterDebugLoop(const LPDEBUG_EVENT debugEv)
+std::string EnterDebugLoop(const LPDEBUG_EVENT debugEv)
 {
 	DWORD dwContinueStatus = DBG_CONTINUE; // exception continuation 
 
@@ -90,7 +54,7 @@ std::string Debugger::EnterDebugLoop(const LPDEBUG_EVENT debugEv)
 				break;
 
 			case EXCEPTION_STACK_OVERFLOW:
-				message = ProcessStackOverflow(debugEv);
+				std::string message = ProcessStackOverflow(debugEv);
 				break;
 
 			default:
@@ -107,4 +71,26 @@ std::string Debugger::EnterDebugLoop(const LPDEBUG_EVENT debugEv)
 			debugEv->dwThreadId,
 			dwContinueStatus);
 	}
+}
+
+
+
+void OpenProcess(std::string fileName)
+{
+	if (fileName == "")
+		throw std::runtime_error("No exe to debug");
+
+	STARTUPINFO si;
+	PROCESS_INFORMATION pi;
+	ZeroMemory(&si, sizeof(si));
+	si.cb = sizeof(si);
+	ZeroMemory(&pi, sizeof(pi));
+
+	if (!CreateProcess(fileName.c_str(), NULL, NULL, NULL, FALSE,
+						DEBUG_ONLY_THIS_PROCESS, NULL, NULL, &si, &pi))
+		throw std::runtime_error("Failed open process");
+
+	DEBUG_EVENT debug_event = { 0 };
+
+	EnterDebugLoop(&debug_event);
 }
