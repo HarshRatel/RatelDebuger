@@ -1,5 +1,19 @@
 #include "Debugger.hpp"
 
+void AddToLog(HWND dlgHdl, std::string str)
+{
+
+	HWND dlgItem = GetDlgItem(dlgHdl, EDIT_INFO);
+
+	int oldLength = GetWindowTextLength(dlgItem) + 1;
+	char * oldText = new char[oldLength];
+	GetWindowText(dlgItem, oldText, oldLength);
+	std::string temp(oldText);
+	temp += str + "\r\n";
+	SetWindowText(dlgItem, temp.c_str());
+	delete oldText;
+}
+
 void LogDebugException(HWND dlgHdl, const LPDEBUG_EVENT debugEv, std::string formatStr)
 {
 	char buff[500];
@@ -8,28 +22,22 @@ void LogDebugException(HWND dlgHdl, const LPDEBUG_EVENT debugEv, std::string for
 		debugEv->u.Exception.ExceptionRecord.ExceptionAddress,
 		debugEv->u.Exception.ExceptionRecord.ExceptionCode);
 
-	HWND dlgItem = GetDlgItem(dlgHdl, EDIT_INFO);
-
-	int oldLength = GetWindowTextLength(dlgItem) + 1;
-	char * oldText = new char[oldLength];
-	GetWindowText(dlgItem, oldText, oldLength);
-
-	std::string buffAsStdStr(buff);
-	std::string temp(oldText);
-
-	temp += buffAsStdStr + "\r\n";
-
-	SetWindowText(dlgItem, temp.c_str());
-
-	delete oldText;
+	std::string str(buff);
+	
+	AddToLog(dlgHdl, str);
 }
 
-void LogDebugEvent(HWND dlgHdl, const LPDEBUG_EVENT debugEv)
+void ProcessDebugException(HWND dlgHdl, const LPDEBUG_EVENT debugEv)
 {
 	if (debugEv->u.Exception.dwFirstChance == 1)
 		LogDebugException(dlgHdl, debugEv, "first chance exception at 0x%08x, exception-code: 0x%08x");
 	else
 		LogDebugException(dlgHdl, debugEv, "second chance exception at 0x%08x, exception-code: 0x%08x");
+
+}
+
+void ProcessDebugEvent(HWND dlgHdl, const LPDEBUG_EVENT debugEv)
+{
 
 }
 
@@ -57,50 +65,86 @@ std::string EnterDebugLoop(HWND dlgHdl, const LPDEBUG_EVENT debugEv)
 			switch (debugEv->u.Exception.ExceptionRecord.ExceptionCode)
 			{
 			case EXCEPTION_ACCESS_VIOLATION:
-				LogDebugEvent(dlgHdl, debugEv);
-				dwContinueStatus = DBG_EXCEPTION_HANDLED;
+				ProcessDebugException(dlgHdl, debugEv);
+				dwContinueStatus = DBG_EXCEPTION_NOT_HANDLED;
 				break;
 
 			case EXCEPTION_BREAKPOINT:
-				LogDebugEvent(dlgHdl, debugEv);
-				dwContinueStatus = DBG_EXCEPTION_HANDLED;
+				ProcessDebugException(dlgHdl, debugEv);
+				dwContinueStatus = DBG_EXCEPTION_NOT_HANDLED;
 				break;
 
 			case EXCEPTION_DATATYPE_MISALIGNMENT:
-				LogDebugEvent(dlgHdl, debugEv);
-				dwContinueStatus = DBG_EXCEPTION_HANDLED;
+				ProcessDebugException(dlgHdl, debugEv);
+				dwContinueStatus = DBG_EXCEPTION_NOT_HANDLED;
 				break;
 
 			case EXCEPTION_SINGLE_STEP:
-				LogDebugEvent(dlgHdl, debugEv);
-				dwContinueStatus = DBG_EXCEPTION_HANDLED;
+				ProcessDebugException(dlgHdl, debugEv);
+				dwContinueStatus = DBG_EXCEPTION_NOT_HANDLED;
 				break;
 
 			case DBG_CONTROL_C:
-				LogDebugEvent(dlgHdl, debugEv);
-				dwContinueStatus = DBG_EXCEPTION_HANDLED;
+				ProcessDebugException(dlgHdl, debugEv);
+				dwContinueStatus = DBG_EXCEPTION_NOT_HANDLED;
 				break;
 
 			case EXCEPTION_STACK_OVERFLOW:
-				LogDebugException(dlgHdl, debugEv, "exception at %x, exception-code: 0x%08x");
-				dwContinueStatus = DBG_EXCEPTION_HANDLED;
+				LogDebugException(dlgHdl, debugEv, "Exception at 0x%08x, exception-code: 0x%08x");
+				dwContinueStatus = DBG_EXCEPTION_NOT_HANDLED;
 				break;
 
 			case STATUS_STACK_BUFFER_OVERRUN:
-				LogDebugException(dlgHdl, debugEv, "exception at %x, exception-code: 0x%08x");
+				LogDebugException(dlgHdl, debugEv, "Exception at 0x%08x, exception-code: 0x%08x");
 				dwContinueStatus = DBG_EXCEPTION_NOT_HANDLED;
 				break;
 
 			default:
-				LogDebugEvent(dlgHdl, debugEv);
+				ProcessDebugException(dlgHdl, debugEv);
 
 				dwContinueStatus = DBG_EXCEPTION_NOT_HANDLED;
 				break;
 			}
 
 			break;
-		}
 
+		case CREATE_THREAD_DEBUG_EVENT:
+			AddToLog(dlgHdl, std::string("Create thread id ") + std::to_string(debugEv->dwThreadId));
+			break;
+
+		case CREATE_PROCESS_DEBUG_EVENT:
+			AddToLog(dlgHdl, std::string("Create process id ") + std::to_string(debugEv->dwProcessId));
+
+			break;
+
+		case EXIT_THREAD_DEBUG_EVENT:
+			AddToLog(dlgHdl, std::string("Exit thread id ") + std::to_string(debugEv->dwThreadId));
+
+			break;
+
+		case EXIT_PROCESS_DEBUG_EVENT:
+			AddToLog(dlgHdl, std::string("Exit process id ") + std::to_string(debugEv->dwProcessId));
+
+			break;
+
+		case LOAD_DLL_DEBUG_EVENT:
+			AddToLog(dlgHdl, std::string("Load library with address ") + std::to_string((int)debugEv->u.LoadDll.lpBaseOfDll));
+
+			break;
+
+		case UNLOAD_DLL_DEBUG_EVENT:
+			AddToLog(dlgHdl, std::string("Unload library with address ") + std::to_string((int)debugEv->u.UnloadDll.lpBaseOfDll));
+			break;
+
+		case OUTPUT_DEBUG_STRING_EVENT:
+			AddToLog(dlgHdl, std::string("Debug string : ") + std::string(debugEv->u.DebugString.lpDebugStringData));
+			break;
+
+		case RIP_EVENT:
+			AddToLog(dlgHdl, std::string("Rip error ") + std::to_string(debugEv->u.RipInfo.dwError));
+
+			break;
+		}
 		ContinueDebugEvent(debugEv->dwProcessId,
 			debugEv->dwThreadId,
 			dwContinueStatus);
