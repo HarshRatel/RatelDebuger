@@ -52,10 +52,12 @@ std::string OpenFileExplorer()
 	return filename;
 }
 
+std::string fileName = "";
+bool isDebugging = false;
+std::thread * thr = nullptr;
+
 INT_PTR __stdcall DlgProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 {
-	std::string fileName = "";
-
 	switch (uMsg)
 	{
 	case WM_COMMAND:
@@ -65,8 +67,12 @@ INT_PTR __stdcall DlgProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 			if (fileName == "")
 				return 1;
 
-			std::thread thread(OpenProcess, fileName);
-
+			if (!isDebugging)
+			{
+				isDebugging = true;
+				thr = new std::thread(OpenProcessByName, hwnd, fileName);
+			}
+			
 			return 1;
 		}
 
@@ -82,9 +88,12 @@ INT_PTR __stdcall DlgProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 	{
 		EndDialog(hwnd, 0); // Use this if you create the dialog via DialogBox function
 		PostQuitMessage(0); // Use this if you create the dialog via CreateDialog
+		delete thr;
 		break;
 	}
 	}
+
+	
 
 	return 0;
 }

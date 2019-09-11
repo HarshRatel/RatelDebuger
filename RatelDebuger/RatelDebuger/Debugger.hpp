@@ -4,4 +4,4 @@
 
 #include "resource.h"
 
-void OpenProcess(std::string fileName);
+void OpenProcessByName(HWND hdlDlg, std::string fileName);

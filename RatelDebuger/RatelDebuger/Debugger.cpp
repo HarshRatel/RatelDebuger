@@ -1,22 +1,50 @@
 #include "Debugger.hpp"
 
+void LogDebugException(HWND dlgHdl, const LPDEBUG_EVENT debugEv, std::string formatStr)
+{
+	char buff[500];
+	memset(buff, 0, sizeof(buff));
+	snprintf(buff, sizeof(buff), formatStr.c_str(),
+		debugEv->u.Exception.ExceptionRecord.ExceptionAddress,
+		debugEv->u.Exception.ExceptionRecord.ExceptionCode);
+
+	HWND dlgItem = GetDlgItem(dlgHdl, EDIT_INFO);
+
+	int oldLength = GetWindowTextLength(dlgItem) + 1;
+	char * oldText = new char[oldLength];
+	GetWindowText(dlgItem, oldText, oldLength);
+
+	std::string buffAsStdStr(buff);
+	std::string temp(oldText);
+
+	temp += buffAsStdStr + "\r\n";
+
+	SetWindowText(dlgItem, temp.c_str());
+
+	delete oldText;
+}
+
+void LogDebugEvent(HWND dlgHdl, const LPDEBUG_EVENT debugEv)
+{
+	if (debugEv->u.Exception.dwFirstChance == 1)
+		LogDebugException(dlgHdl, debugEv, "first chance exception at 0x%08x, exception-code: 0x%08x");
+	else
+		LogDebugException(dlgHdl, debugEv, "second chance exception at 0x%08x, exception-code: 0x%08x");
+
+}
+
 std::string ProcessStackOverflow(const LPDEBUG_EVENT debugEv)
 {
 	return "Stack Overflow exception";
 }
 
-std::string EnterDebugLoop(const LPDEBUG_EVENT debugEv)
+std::string EnterDebugLoop(HWND dlgHdl, const LPDEBUG_EVENT debugEv)
 {
 	DWORD dwContinueStatus = DBG_CONTINUE; // exception continuation 
 
 	for (;;)
 	{
-		// Wait for a debugging event to occur. The second parameter indicates
-		// that the function does not return until a debugging event occurs. 
-
 		WaitForDebugEvent(debugEv, INFINITE);
-
-		// Process the debugging event code. 
 
 		switch (debugEv->dwDebugEventCode)
 		{
@@ -29,43 +57,49 @@ std::string EnterDebugLoop(const LPDEBUG_EVENT debugEv)
 			switch (debugEv->u.Exception.ExceptionRecord.ExceptionCode)
 			{
 			case EXCEPTION_ACCESS_VIOLATION:
-				// First chance: Pass this on to the system. 
-				// Last chance: Display an appropriate error. 
+				LogDebugEvent(dlgHdl, debugEv);
+				dwContinueStatus = DBG_EXCEPTION_HANDLED;
 				break;
 
 			case EXCEPTION_BREAKPOINT:
-				// First chance: Display the current 
-				// instruction and register values. 
+				LogDebugEvent(dlgHdl, debugEv);
+				dwContinueStatus = DBG_EXCEPTION_HANDLED;
 				break;
 
 			case EXCEPTION_DATATYPE_MISALIGNMENT:
-				// First chance: Pass this on to the system. 
-				// Last chance: Display an appropriate error. 
+				LogDebugEvent(dlgHdl, debugEv);
+				dwContinueStatus = DBG_EXCEPTION_HANDLED;
 				break;
 
 			case EXCEPTION_SINGLE_STEP:
-				// First chance: Update the display of the 
-				// current instruction and register values. 
+				LogDebugEvent(dlgHdl, debugEv);
+				dwContinueStatus = DBG_EXCEPTION_HANDLED;
 				break;
 
 			case DBG_CONTROL_C:
-				// First chance: Pass this on to the system. 
-				// Last chance: Display an appropriate error. 
+				LogDebugEvent(dlgHdl, debugEv);
+				dwContinueStatus = DBG_EXCEPTION_HANDLED;
 				break;
 
 			case EXCEPTION_STACK_OVERFLOW:
-				std::string message = ProcessStackOverflow(debugEv);
+				LogDebugException(dlgHdl, debugEv, "exception at %x, exception-code: 0x%08x");
+				dwContinueStatus = DBG_EXCEPTION_HANDLED;
+				break;
+
+			case STATUS_STACK_BUFFER_OVERRUN:
+				LogDebugException(dlgHdl, debugEv, "exception at %x, exception-code: 0x%08x");
+				dwContinueStatus = DBG_EXCEPTION_NOT_HANDLED;
 				break;
 
 			default:
-				// Handle other exceptions. 
+				LogDebugEvent(dlgHdl, debugEv);
+
+				dwContinueStatus = DBG_EXCEPTION_NOT_HANDLED;
 				break;
 			}
 
 			break;
 		}
-
-		// Resume executing the thread that reported the debugging event. 
 
 		ContinueDebugEvent(debugEv->dwProcessId,
 			debugEv->dwThreadId,
@@ -73,9 +107,7 @@ std::string EnterDebugLoop(const LPDEBUG_EVENT debugEv)
 	}
 }
 
-
-
-void OpenProcess(std::string fileName)
+void OpenProcessByName(HWND dlgHdl, std::string fileName)
 {
 	if (fileName == "")
 		throw std::runtime_error("No exe to debug");
@@ -87,10 +119,10 @@ void OpenProcess(std::string fileName)
 	ZeroMemory(&pi, sizeof(pi));
 
 	if (!CreateProcess(fileName.c_str(), NULL, NULL, NULL, FALSE,
-						DEBUG_ONLY_THIS_PROCESS, NULL, NULL, &si, &pi))
+		DEBUG_ONLY_THIS_PROCESS, NULL, NULL, &si, &pi))
 		throw std::runtime_error("Failed open process");
 
 	DEBUG_EVENT debug_event = { 0 };
 
-	EnterDebugLoop(&debug_event);
+	EnterDebugLoop(dlgHdl, &debug_event);
 }
